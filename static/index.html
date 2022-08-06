@@ -110,7 +110,7 @@
                 <h4>API Usage</h4>
                 <h6>Request example</h6>
                 <pre><code class="language-javascript">const file = document.querySelector("input").files[0];
-fetch("<span class="href"></span>upload?fileName=react.pdf", {
+fetch("<span class="href"></span>/upload?fileName=react.pdf", {
   method: "POST",
   body: file,
 });</code></pre>
@@ -118,10 +118,10 @@ fetch("<span class="href"></span>upload?fileName=react.pdf", {
                 <pre><code class="language-json">{
   "fileId": "22d9437d2f95b52dd4ffc9e6611d043a",
   "fileSize": 12863501,
-  "url": "<span class="href"></span>file/22d9437d2f95b52dd4ffc9e6611d043a",
-  "longURL": "<span class="href"></span>file/22d9437d2f95b52dd4ffc9e6611d043a/react.pdf",
-  "downloadURL": "<span class="href"></span>file/22d9437d2f95b52dd4ffc9e6611d043a?download=1",
-  "longDownloadURL": "<span class="href"></span>file/22d9437d2f95b52dd4ffc9e6611d043a/react.pdf?download=1",
+  "url": "<span class="href"></span>/file/22d9437d2f95b52dd4ffc9e6611d043a",
+  "longURL": "<span class="href"></span>/file/22d9437d2f95b52dd4ffc9e6611d043a/react.pdf",
+  "downloadURL": "<span class="href"></span>/file/22d9437d2f95b52dd4ffc9e6611d043a?download=1",
+  "longDownloadURL": "<span class="href"></span>/file/22d9437d2f95b52dd4ffc9e6611d043a/react.pdf?download=1",
   "parts": [
     "https://cdn.discordapp.com/attachments/989459557900251186/1001690979327279205/react.pdf-chunk-1",
     "https://cdn.discordapp.com/attachments/989459557900251186/1001690975644692491/react.pdf-chunk-2"
@@ -152,7 +152,7 @@ fetch("<span class="href"></span>upload?fileName=react.pdf", {
         <script>
             document
                 .querySelectorAll(".href")
-                .forEach((i) => (i.innerText = location.href));
+                .forEach((i) => (i.innerText = location.origin));
             document.querySelectorAll("pre code").forEach((el) => {
                 hljs.highlightElement(el);
             });
