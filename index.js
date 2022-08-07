@@ -125,10 +125,10 @@ app.post("/upload", async (req, res) => {
         res.send({
             fileId,
             fileSize,
-            url: `${req.protocol}://${req.get("host")}/file/${fileId}`,
-            longURL: `${req.protocol}://${req.get("host")}/file/${fileId}/${fileName}`,
-            downloadURL: `${req.protocol}://${req.get("host")}/file/${fileId}?download=1`,
-            longDownloadURL: `${req.protocol}://${req.get("host")}/file/${fileId}/${fileName}?download=1`,
+            url: `${req.get('origin')}/file/${fileId}`,
+            longURL: `${req.get('origin')}/file/${fileId}/${fileName}`,
+            downloadURL: `${req.get('origin')}/file/${fileId}?download=1`,
+            longDownloadURL: `${req.get('origin')}/file/${fileId}/${fileName}?download=1`,
             parts: uploadedParts,
         });
     } catch (error) {
