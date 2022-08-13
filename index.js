@@ -32,6 +32,9 @@ const RANGE_SIZE = 5242880; // 5 MB
 
 const token = process.env.DISCORD_BOT_TOKEN;
 const channelId = process.env.DISCORD_CHANNEL_ID;
+
+const CLIENT_KEY = 'aw4xtn0y23akk8b5';
+const CLIENT_SECRET = 'aad3fea26303b3ce5a81782acaeda8b3';
 if (!token || !channelId)
     throw new Error("Missing discord bot token or channel id");
 
@@ -238,6 +241,45 @@ app.get(["/file/:id/*", "/file/:id"], async (req, res) => {
             });
     }
 });
+
+app.get('/oauth', (req, res) => {
+    const csrfState = Math.random().toString(36).substring(2);
+    const redirect_uri = 'http://localhost:5000/redirect';
+    res.cookie('csrfState', csrfState, { maxAge: 60000 });
+
+
+    let url = 'https://www.tiktok.com/auth/authorize/';
+
+    url += '?client_key=' + CLIENT_KEY;
+    url += '&scope=user.info.basic,video.list';
+    url += '&response_type=code';
+    url += '&redirect_uri=' + redirect_uri;
+    url += '&state=' + csrfState;
+
+    res.redirect(url);
+})
+
+app.get('/redirect', (req, res) => {
+    const { code, state } = req.query;
+    const { csrfState } = req.cookies;
+
+    if (state !== csrfState) {
+        res.status(422).send('Invalid state');
+        return;
+    }
+
+    let url_access_token = 'https://open-api.tiktok.com/oauth/access_token/';
+    url_access_token += '?client_key=' + CLIENT_KEY;
+    url_access_token += '&client_secret=' + CLIENT_SECRET;
+    url_access_token += '&code=' + code;
+    url_access_token += '&grant_type=authorization_code';
+
+    fetch(url_access_token, {method: 'post'})
+        .then(res => res.json())
+        .then(json => {
+            res.send(json);
+        });
+})
 
 const port = process.env.PORT || 5000;
 app.listen(port, () =>
