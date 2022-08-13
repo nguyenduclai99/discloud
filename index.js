@@ -244,7 +244,7 @@ app.get(["/file/:id/*", "/file/:id"], async (req, res) => {
 
 app.get('/oauth', (req, res) => {
     const csrfState = Math.random().toString(36).substring(2);
-    const redirect_uri = 'http://localhost:5000/redirect';
+    const redirect_uri = `${req.get('origin')}`;
     res.cookie('csrfState', csrfState, { maxAge: 60000 });
 
 
