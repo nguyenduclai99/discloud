@@ -251,7 +251,7 @@ app.get('/oauth', (req, res) => {
     let url = 'https://www.tiktok.com/auth/authorize/';
 
     url += '?client_key=' + CLIENT_KEY;
-    url += '&scope=user.info.basic,video.list';
+    url += '&scope=user.info.basic,video.list,video.upload';
     url += '&response_type=code';
     url += '&redirect_uri=' + redirect_uri;
     url += '&state=' + csrfState;
