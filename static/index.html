@@ -179,7 +179,7 @@ fetch("<span class="href"></span>/upload?fileName=react.pdf", {
                 progressBar.setAttribute("aria-valuenow", "0");
 
                 const xhr = new XMLHttpRequest();
-                const path = `${location.origin}/upload?fileName=${encodeURIComponent(
+                const path = `${location.origin}/api/v1/discloud?fileName=${encodeURIComponent(
                     file.name
                 )}`;
                 xhr.open("POST", path, true);
@@ -200,7 +200,7 @@ fetch("<span class="href"></span>/upload?fileName=react.pdf", {
 
                         document.querySelector("#result input").value = JSON.parse(
                             xhr.responseText
-                        ).longURL;
+                        ).data.longURL;
                     } else {
                         document.querySelector("#upload-progress").classList.add("d-none");
                         document.querySelector(".alert").classList.remove("d-none");

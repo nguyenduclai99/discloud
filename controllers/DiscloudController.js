@@ -1,53 +1,22 @@
+'use strict';
+
 import axios from "axios";
-import cors from "cors";
+import { discloudApi } from "../models/discloud.js";
+import { uploadToDiscord } from "../services/discord.js";
+import { randomId } from "../utils/id.js";
+import { AsyncStreamProcessor } from "../utils/stream.js";
+import { formatFileName } from "../utils/string.js";
+import { wait } from "../utils/time.js";
 import dotenv from "dotenv";
-import express from "express";
-import path from "path";
-import { createClient } from "redis";
-import { uploadToDiscord } from "./services/discord.js";
-import { randomId } from "./utils/id.js";
-import { AsyncStreamProcessor } from "./utils/stream.js";
-import { formatFileName } from "./utils/string.js";
-import { wait } from "./utils/time.js";
-import { connectDB } from "./config/database.js";
-import routes from './routes.js';
-
 dotenv.config();
-const app = express();
-connectDB(process.env.MONGODB_URL);
-// Redis connection
-const client = createClient({
-    url: process.env.REDIS_URL,
-});
-
-client.on("error", (err) => {
-    console.log("Failed to connect to Redis", err);
-    process.exit(1);
-});
-
-await client.connect();
-console.log("Connected to Redis database");
 
 // Constants
 const CHUNK_SIZE = 8388608; // 8 MB
 const RANGE_SIZE = 5242880; // 5 MB
-
 const token = process.env.DISCORD_BOT_TOKEN;
 const channelId = process.env.DISCORD_CHANNEL_ID;
 
-const CLIENT_KEY = 'aw4xtn0y23akk8b5';
-const CLIENT_SECRET = 'aad3fea26303b3ce5a81782acaeda8b3';
-if (!token || !channelId)
-    throw new Error("Missing discord bot token or channel id");
-
-app.enable("trust proxy");
-app.use(cors());
-
-app.get("/docs", async (req, res) => {
-    res.sendFile(path.resolve("./static/index.html"));
-});
-
-app.post("/upload", async (req, res) => {
+const upload = async (req, res) => {
     try {
         let chunks = [];
         let uploadedParts = [];
@@ -92,7 +61,7 @@ app.post("/upload", async (req, res) => {
                 filesToUpload.push(newChunk);
             }
         });
-
+        
         req.on("end", async () => {
             // Add the final chunks if there is any left-over
             requestEnded = true;
@@ -114,57 +83,71 @@ app.post("/upload", async (req, res) => {
                     `${fileName}-chunk-${++uploadedCount}`
                 );
                 uploadedParts.push(url);
+                
             }
         }
 
         const fileId = randomId();
-        await client.set(
-            fileId,
-            JSON.stringify({
-                chunkSize: CHUNK_SIZE,
-                fileName,
-                fileSize,
-                parts: uploadedParts,
-            })
-        );
-        res.send({
-            fileId,
-            fileSize,
-            url: `${req.get('origin')}/file/${fileId}`,
-            longURL: `${req.get('origin')}/file/${fileId}/${fileName}`,
-            downloadURL: `${req.get('origin')}/file/${fileId}?download=1`,
-            longDownloadURL: `${req.get('origin')}/file/${fileId}/${fileName}?download=1`,
+        const discloud = new discloudApi({
+            file_id: fileId,
+            chunk_size: CHUNK_SIZE,
+            file_name: fileName,
+            file_size: fileSize,
             parts: uploadedParts,
+            created_at: new Date().toISOString(),
         });
+
+        await discloud.save()
+        .then(doc => {
+            res.status(200).send({
+                code: 200,
+                message: "Success",
+                data: {
+                    fileId,
+                    fileSize,
+                    url: `${req.get('origin')}/v1/file/${fileId}`,
+                    longURL: `${req.get('origin')}/v1/file/${fileId}/${fileName}`,
+                    downloadURL: `${req.get('origin')}/v1/file/${fileId}?download=1`,
+                    longDownloadURL: `${req.get('origin')}/v1/file/${fileId}/${fileName}?download=1`,
+                    parts: uploadedParts,
+                },
+            })
+        })
+        .catch(err => {
+            res.status(400).send({
+                code: 400,
+                message: err?.response?.data ? err.response.data : err,
+                data: null
+            })
+            console.error(err)
+        })
     } catch (error) {
-        console.log(error?.response?.data ? error.response.data : error);
         if (!res.headersSent)
             res.status(500).send({
                 message: "Internal server error",
                 error,
             });
+            
     }
-});
+}
 
-app.get(["/file/:id/*", "/file/:id"], async (req, res) => {
+const fileDetail = async (req, res) => {
     try {
-        let info = await client.get(req.params.id);
+        let info = await discloudApi.findOne({file_id: req.params.id});
 
         if (!info) return res.status(404).send("Cannot find the specified file");
 
-        info = JSON.parse(info);
-
-        res.setHeader("Content-Length", info.fileSize);
+        res.setHeader("Content-Length", info.file_size);
         res.setHeader("Accept-Ranges", "bytes");
 
         if (+req.query.download) {
             res.setHeader(
                 "Content-Disposition",
-                `attachment; filename="${info.fileName}"`
+                `attachment; filename="${info.file_name}"`
             );
         }
 
-        res.contentType(info.fileName.split(".").slice(-1)[0]);
+        res.contentType(info.file_name.split(".").slice(-1)[0]);
 
         // Parse the range header if client is requesting a video
         const rangeStr = req.headers.range;
@@ -172,17 +155,17 @@ app.get(["/file/:id/*", "/file/:id"], async (req, res) => {
         const start = rangeStr ? +rangeStr.split("=")[1].split("-")[0] : null;
 
         const end = rangeStr ?
-            start + RANGE_SIZE >= info.fileSize - 1 ?
-            info.fileSize - 1 :
+            start + RANGE_SIZE >= info.file_size - 1 ?
+            info.file_size - 1 :
             start + RANGE_SIZE :
             null;
 
         const partsToDownload = rangeStr ?
             (() => {
-                const startPartNumber = Math.ceil(start / info.chunkSize) ?
-                    Math.ceil(start / info.chunkSize) - 1 :
+                const startPartNumber = Math.ceil(start / info.chunk_size) ?
+                    Math.ceil(start / info.chunk_size) - 1 :
                     0;
-                const endPartNumber = Math.ceil(end / info.chunkSize);
+                const endPartNumber = Math.ceil(end / info.chunk_size);
 
                 const partsToDownload = info.parts
                     .map((part) => ({
@@ -190,19 +173,20 @@ app.get(["/file/:id/*", "/file/:id"], async (req, res) => {
                     }))
                     .slice(startPartNumber, endPartNumber);
 
-                partsToDownload[0].start = start % info.chunkSize;
+                partsToDownload[0].start = start % info.chunk_size;
                 partsToDownload[partsToDownload.length - 1].end =
-                    end % info.chunkSize;
+                    end % info.chunk_size;
 
                 res.status(206);
                 res.setHeader("Content-Length", end - start + 1);
                 res.setHeader(
                     "Content-Range",
-                    `bytes ${start}-${end}/${info.fileSize}`
+                    `bytes ${start}-${end}/${info.file_size}`
                 );
 
                 return partsToDownload;
             })() :
+
             info.parts.map((part) => ({
                 url: part
             }));
@@ -215,6 +199,7 @@ app.get(["/file/:id/*", "/file/:id"], async (req, res) => {
                     Range: `bytes=${part.start || 0}-${part.end || ""}`
                 } :
                 {};
+
             await new Promise((resolve, reject) => {
                 axios
                     .get(part.url, {
@@ -222,7 +207,6 @@ app.get(["/file/:id/*", "/file/:id"], async (req, res) => {
                         responseType: "stream"
                     })
                     .then((response) => {
-                        // console.log(response);
                         response.data.pipe(
                             new AsyncStreamProcessor(async (data) => {
                                 if (!res.write(data))
@@ -243,11 +227,75 @@ app.get(["/file/:id/*", "/file/:id"], async (req, res) => {
                 error,
             });
     }
-});
+}
 
-const port = process.env.PORT || 5000;
+const files = async (req, res) => {
+    try {
+        let limit = req.query.limit
+        let page = req.query.page
+        let file_id = req.query.file_id
+        let file_name = req.query.file_name
+        let skip = 0;
 
-routes(app)
-app.listen(port, () =>
-    console.log(`Server is listening on port ${port}. http://localhost:${port}`)
-);
+        let params = {
+            file_id,
+            file_name,
+        }
+    
+        for (const key in params) {
+            if (params[key] === undefined) {
+              delete params[key];
+            }
+        }
+    
+        if (!limit) limit = 10;
+        if (!page || page == 0) {
+            page = 1
+            skip = 0
+        } else {
+            skip = limit * (page - 1)
+        };
+
+        let total = await discloudApi.find(params).count()
+        await discloudApi.find(params)
+        .limit(limit)
+        .skip(skip)
+        .then(docs => {
+            res.status(200).send({
+                code: 200,
+                message: "Success",
+                data: docs,
+                total: total,
+                page: parseInt(page),
+                next_page: parseInt(page) + 1,
+                limit: parseInt(limit),
+                total_page: Math.ceil(total/limit),
+            })
+        })
+        .catch(err => {
+            res.status(500).send({
+                code: 500,
+                message: err.message,
+                data: null,
+                total: 0,
+                page: parseInt(page),
+                next_page: parseInt(page),
+                limit: parseInt(limit),
+                total_page: 0,
+            })
+        })
+    } catch (error) {
+        res.status(500).send({
+            code: 500,
+            message: error.message,
+            data: null,
+            total: 0,
+            page: parseInt(page),
+            next_page: parseInt(page),
+            limit: parseInt(limit),
+            total_page: 0,
+        })
+    }
+}
+
+export { upload, fileDetail, files };
