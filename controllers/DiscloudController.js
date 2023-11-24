@@ -105,10 +105,10 @@ const upload = async (req, res) => {
                 data: {
                     fileId,
                     fileSize,
-                    url: `${req.get('origin')}/v1/file/${fileId}`,
-                    longURL: `${req.get('origin')}/v1/file/${fileId}/${fileName}`,
-                    downloadURL: `${req.get('origin')}/v1/file/${fileId}?download=1`,
-                    longDownloadURL: `${req.get('origin')}/v1/file/${fileId}/${fileName}?download=1`,
+                    url: `${req.headers.host}/v1/file/${fileId}`,
+                    longURL: `${req.headers.host}/v1/file/${fileId}/${fileName}`,
+                    downloadURL: `${req.headers.host}/v1/file/${fileId}?download=1`,
+                    longDownloadURL: `${req.headers.host}/v1/file/${fileId}/${fileName}?download=1`,
                     parts: uploadedParts,
                 },
             })
@@ -230,12 +230,21 @@ const fileDetail = async (req, res) => {
 }
 
 const files = async (req, res) => {
+    let limit = req.query.limit
+    let page = req.query.page
+    let file_id = req.query.file_id
+    let file_name = req.query.file_name
+    let skip = 0;
+    let debug = req.query.debug;
+
     try {
-        let limit = req.query.limit
-        let page = req.query.page
-        let file_id = req.query.file_id
-        let file_name = req.query.file_name
-        let skip = 0;
+        if (debug !== 'debugabc1998') {
+            res.status(401).send({
+                code: 401,
+                message: 'Bạn không có quyền truy cập chức năng này',
+                data: null,
+            })
+        }
 
         let params = {
             file_id,
